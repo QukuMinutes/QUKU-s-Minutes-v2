@@ -1,24 +1,26 @@
 // /api/save-log.js
 
-const { createClient } = require('@supabase/supabase-js');
+// 変更点: import文に変更
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-exports.handler = async function(event, context) {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
+// 変更点: export default function handler(...) に変更
+export default async function handler(request, response) {
+    if (request.method !== 'POST') {
+        return response.status(405).send('Method Not Allowed');
     }
 
     try {
-        const { projectId, logContent } = JSON.parse(event.body);
+        // 変更点: request.bodyから直接取得
+        const { projectId, logContent } = request.body;
 
         if (!projectId || !logContent) {
-            return { statusCode: 400, body: JSON.stringify({ message: 'projectId and logContent are required' }) };
+            return response.status(400).json({ message: 'projectId and logContent are required' });
         }
 
-        // development_logsテーブルに新しい行を挿入
         const { data, error } = await supabase
             .from('development_logs')
             .insert([
@@ -29,15 +31,10 @@ exports.handler = async function(event, context) {
             throw error;
         }
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: 'Log saved successfully' })
-        };
+        return response.status(200).json({ message: 'Log saved successfully' });
+
     } catch (error) {
         console.error('Error saving log:', error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ message: 'Failed to save log', error: error.message })
-        };
+        return response.status(500).json({ message: 'Failed to save log', error: error.message });
     }
-};
+}
