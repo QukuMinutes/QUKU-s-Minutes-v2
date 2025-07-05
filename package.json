@@ -1,0 +1,14 @@
+{
+  "name": "quku-minutes-v2",
+  "version": "1.0.0",
+  "description": "AI log management tool with Supabase and Vercel",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
