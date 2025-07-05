@@ -62,6 +62,12 @@
             <button id="save-log-btn">3. このログをDBに記録する</button>
         </div>
         
+        <div id="last-log-summary" class="form-group" style="background: var(--panel-bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 8px; display: none;">
+            <div style="font-weight: bold; margin-bottom: 6px;">前回保存したログの冒頭・終わり</div>
+            <div id="last-log-head" style="font-size: 0.95em; color: #A78BFA; margin-bottom: 4px;"></div>
+            <div id="last-log-tail" style="font-size: 0.95em; color: #A78BFA;"></div>
+        </div>
+
         <div class="progress-bar-container" id="progress-bar-container">
             <div class="progress-bar" id="progress-bar"></div>
         </div>
@@ -74,12 +80,6 @@
             <textarea id="ai-prompt-output" readonly style="min-height: 180px;" placeholder="プロジェクトを選択すると、AIへの指示書がここに自動生成されます。"></textarea>
             <button id="copy-ai-prompt-btn" class="copy-button">指示書をコピー</button>
         </div>
-
-        <div class="form-group">
-            <label for="all-logs-output">（参考）全ログの手動確認エリア</label>
-            <button id="fetch-all-logs-btn">選択中プロジェクトの全ログをここに表示</button>
-            <textarea id="all-logs-output" readonly style="margin-top: 10px; min-height: 200px;"></textarea>
-        </div>
     </div>
 
     <script>
@@ -89,13 +89,14 @@
         const projectSelector = document.getElementById('project-selector');
         const logContentInput = document.getElementById('log-content-input');
         const saveLogBtn = document.getElementById('save-log-btn');
-        const fetchAllLogsBtn = document.getElementById('fetch-all-logs-btn');
-        const allLogsOutput = document.getElementById('all-logs-output');
         const aiPromptOutput = document.getElementById('ai-prompt-output');
         const copyAiPromptBtn = document.getElementById('copy-ai-prompt-btn');
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
         const messageArea = document.getElementById('message-area');
+        const lastLogSummary = document.getElementById('last-log-summary');
+        const lastLogHead = document.getElementById('last-log-head');
+        const lastLogTail = document.getElementById('last-log-tail');
 
         // --- メッセージ表示ヘルパー ---
         const showMessage = (type, text, duration = 4000) => {
@@ -183,7 +184,10 @@
         // --- イベントリスナー ---
 
         // ★ プロジェクト選択時に指示書を自動生成
-        projectSelector.addEventListener('change', generateAiPrompt);
+        projectSelector.addEventListener('change', () => {
+            generateAiPrompt();
+            fetchAndShowLastLog(projectSelector.value);
+        });
 
         saveLogBtn.addEventListener('click', async () => {
             const projectId = projectSelector.value;
@@ -208,6 +212,7 @@
 
                 showMessage('success', 'ログをデータベースに記録しました！');
                 logContentInput.value = '';
+                fetchAndShowLastLog(projectId);
             } catch (error) {
                 console.error('ログの保存に失敗:', error);
                 showMessage('error', `ログの保存に失敗しました: ${error.message}`);
@@ -218,30 +223,32 @@
             }
         });
 
-        fetchAllLogsBtn.addEventListener('click', async () => {
-            const projectId = projectSelector.value;
-            if (!projectId) { return showMessage('error', 'プロジェクトを選択してください。'); }
-
-            fetchAllLogsBtn.disabled = true;
-            fetchAllLogsBtn.textContent = '取得中...';
-            allLogsOutput.value = 'データベースから全ログを取得しています...';
-            startProgress();
-
+        // 最新ログの冒頭・終わり部分を取得して表示する関数
+        const fetchAndShowLastLog = async (projectId) => {
+            if (!projectId) {
+                lastLogSummary.style.display = 'none';
+                return;
+            }
             try {
                 const response = await fetch(`/api/get-all-logs?projectId=${projectId}`);
-                if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
+                if (!response.ok) throw new Error('ログ取得失敗');
                 const allLogsText = await response.text();
-                allLogsOutput.value = allLogsText.trim() || 'このプロジェクトにはまだログがありません。';
-            } catch (error) {
-                console.error('全ログの取得に失敗:', error);
-                allLogsOutput.value = `全ログの取得に失敗しました: ${error.message}`;
-                showMessage('error', `全ログの取得に失敗しました: ${error.message}`);
-            } finally {
-                fetchAllLogsBtn.disabled = false;
-                fetchAllLogsBtn.textContent = '選択中プロジェクトの全ログをここに表示';
-                finishProgress();
+                const logsArr = allLogsText.trim().split(/\n(?=\d{4}[-/年])|\n(?=\[\d{4}\//); // 日付や区切りで分割（必要に応じて調整）
+                const lastLog = logsArr.filter(Boolean).pop();
+                if (!lastLog) {
+                    lastLogSummary.style.display = 'none';
+                    return;
+                }
+                // 冒頭・終わり部分を抽出
+                const head = lastLog.slice(0, 100);
+                const tail = lastLog.slice(-100);
+                lastLogHead.textContent = `冒頭: ${head}${lastLog.length > 100 ? '...' : ''}`;
+                lastLogTail.textContent = `終わり: ...${tail}`;
+                lastLogSummary.style.display = 'block';
+            } catch (e) {
+                lastLogSummary.style.display = 'none';
             }
-        });
+        };
 
         // --- コピーボタン設定 ---
         const setupCopyButton = (button, targetElement, successText) => {
