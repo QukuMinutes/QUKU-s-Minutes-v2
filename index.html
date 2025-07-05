@@ -138,7 +138,7 @@
             const projectId = selectedOption.value;
             const appUrl = window.location.origin; // e.g., https://quku-minutes-v2.vercel.app
 
-            const promptText = `こんにちは。これからあなたと、「${projectName}」プロジェクトについて議論します。\n\nこのプロジェクトに関する過去の議論は、すべて専用のデータベースに時系列で記録されています。\n\nまず、以下の「読書API」を使い、これまでの議事録を全て読み込み、プロジェクトの全体像と経緯を完全に理解してください。\nこれは、あなた専用のAPIエンドポイントです。\n\n【参照すべき議事録を取得するためのAPI呼び出しURL】\n${appUrl}/api/get-all-logs?projectId=${projectId}\n\n上記のURLにアクセスし、返ってきたテキストを学習したら、「ブリーフィング完了。司令官、いつでもどうぞ。」とだけ返信してください。`;
+            const promptText = `こんにちは。これからあなたと、「${projectName}」プロジェクトについて議論します。\n\nこのプロジェクトに関する過去の議論は、すべて専用のデータベースに時系列で記録されています。\n\nまず、以下のURLにアクセスし、そこに表示されているこれまでの議事録を全て読み込み、プロジェクトの全体像と経緯を完全に理解してください。\n\n【参照すべき議事録が記載されたWebページのURL】\n${appUrl}/api/show-logs?projectId=${projectId}\n\n上記のWebページの内容を学習したら、「ブリーフィング完了。司令官、いつでもどうぞ。」とだけ返信してください。`;
 
             aiPromptOutput.value = promptText;
         };
