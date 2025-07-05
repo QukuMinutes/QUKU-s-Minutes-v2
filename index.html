@@ -233,7 +233,7 @@
                 const response = await fetch(`/api/get-all-logs?projectId=${projectId}`);
                 if (!response.ok) throw new Error('ログ取得失敗');
                 const allLogsText = await response.text();
-                const logsArr = allLogsText.trim().split(/\n(?=\d{4}[-/年])|\n(?=\[\d{4}\//); // 日付や区切りで分割（必要に応じて調整）
+                const logsArr = allLogsText.trim().split(/\n(?=\d{4}[-/年])|\n(?=\[?\d{4}[\/年])/);
                 const lastLog = logsArr.filter(Boolean).pop();
                 if (!lastLog) {
                     lastLogSummary.style.display = 'none';
