@@ -32,7 +32,7 @@
         .copy-button { background-color: var(--border-color); }
         .progress-bar-container { width: 100%; height: 6px; background-color: var(--border-color); border-radius: 3px; overflow: hidden; margin-top: 16px; display: none; }
         .progress-bar { height: 100%; width: 0; background-color: var(--accent-color); transition: width 1s ease; }
-        .message-area { padding: 12px; border-radius: 8px; text-align: center; font-weight: 600; display: none; }
+        .message-area { padding: 12px; border-radius: 8px; text-align: center; font-weight: 600; display: none; margin-bottom: 1rem; }
         .message-area.success { background-color: rgba(34, 197, 94, 0.2); color: var(--success-color); }
         .message-area.error { background-color: rgba(239, 68, 68, 0.2); color: var(--error-color); }
     </style>
@@ -54,23 +54,31 @@
         </div>
 
         <div class="form-group">
-            <label for="log-content-input">2. 今回の全ログ（ここにペースト）</label>
+            <label for="log-content-input">2. 今回の全ログ（ここにペーストして記録）</label>
             <textarea id="log-content-input" placeholder="議事録ツールなどから、今回の会話ログ全体をここに貼り付けてください。"></textarea>
         </div>
 
         <div class="form-group">
             <button id="save-log-btn">3. このログをDBに記録する</button>
         </div>
-
+        
         <div class="progress-bar-container" id="progress-bar-container">
             <div class="progress-bar" id="progress-bar"></div>
         </div>
 
+        <hr style="border-color: var(--border-color); margin: 1rem 0;">
+
+        <!-- ===== AI連携エリア ===== -->
         <div class="form-group">
-            <label for="all-logs-output">4. AIへの状況共有用（全ログ）</label>
-            <button id="fetch-all-logs-btn">選択中プロジェクトの全ログを取得</button>
-            <textarea id="all-logs-output" readonly style="margin-top: 10px; min-height: 300px;"></textarea>
-            <button id="copy-all-logs-btn" class="copy-button">全ログをコピー</button>
+            <label for="ai-prompt-output">4. AIへの指示書（新しいチャット用）</label>
+            <textarea id="ai-prompt-output" readonly style="min-height: 180px;" placeholder="プロジェクトを選択すると、AIへの指示書がここに自動生成されます。"></textarea>
+            <button id="copy-ai-prompt-btn" class="copy-button">指示書をコピー</button>
+        </div>
+
+        <div class="form-group">
+            <label for="all-logs-output">（参考）全ログの手動確認エリア</label>
+            <button id="fetch-all-logs-btn">選択中プロジェクトの全ログをここに表示</button>
+            <textarea id="all-logs-output" readonly style="margin-top: 10px; min-height: 200px;"></textarea>
         </div>
     </div>
 
@@ -83,7 +91,8 @@
         const saveLogBtn = document.getElementById('save-log-btn');
         const fetchAllLogsBtn = document.getElementById('fetch-all-logs-btn');
         const allLogsOutput = document.getElementById('all-logs-output');
-        const copyAllLogsBtn = document.getElementById('copy-all-logs-btn');
+        const aiPromptOutput = document.getElementById('ai-prompt-output');
+        const copyAiPromptBtn = document.getElementById('copy-ai-prompt-btn');
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
         const messageArea = document.getElementById('message-area');
@@ -116,16 +125,31 @@
             }, 500);
         };
         
+        // --- ★ 新機能: AI指示書を生成する関数 ---
+        const generateAiPrompt = () => {
+            const selectedOption = projectSelector.options[projectSelector.selectedIndex];
+            if (!selectedOption || !selectedOption.value) {
+                aiPromptOutput.value = 'プロジェクトを選択すると、AIへの指示書がここに自動生成されます。';
+                return;
+            }
+            
+            const projectName = selectedOption.textContent;
+            const projectId = selectedOption.value;
+            const appUrl = window.location.origin; // e.g., https://quku-minutes-v2.vercel.app
+
+            const promptText = `こんにちは。これからあなたと、「${projectName}」プロジェクトについて議論します。\n\nこのプロジェクトに関する過去の議論は、すべて専用のデータベースに時系列で記録されています。\n\nまず、以下の「読書API」を使い、これまでの議事録を全て読み込み、プロジェクトの全体像と経緯を完全に理解してください。\nこれは、あなた専用のAPIエンドポイントです。\n\n【参照すべき議事録を取得するためのAPI呼び出しURL】\n${appUrl}/api/get-all-logs?projectId=${projectId}\n\n上記のURLにアクセスし、返ってきたテキストを学習したら、「ブリーフィング完了。司令官、いつでもどうぞ。」とだけ返信してください。`;
+
+            aiPromptOutput.value = promptText;
+        };
+
         // --- プロジェクト初期化 ---
         const initializeProjects = async () => {
             try {
-                // APIを叩いてプロジェクト一覧を取得
                 const response = await fetch('/api/get-projects');
                 if (!response.ok) throw new Error(`サーバーからの応答が不正です: ${response.status}`);
                 const projects = await response.json();
 
-                projectSelector.innerHTML = ''; // ローディング表示をクリア
-                
+                projectSelector.innerHTML = '';
                 if (projects.length === 0) {
                     projectSelector.innerHTML = `<option value="">プロジェクトがありません</option>`;
                     showMessage('error', 'Supabaseにプロジェクトが登録されていません。先にSupabase側でプロジェクトを登録してください。', null);
@@ -141,14 +165,13 @@
 
                 projects.forEach(project => {
                     const option = document.createElement('option');
-                    option.value = project.id; // valueにはIDを設定
-                    option.textContent = project.project_name; // 表示はプロジェクト名
+                    option.value = project.id;
+                    option.textContent = project.project_name;
                     projectSelector.appendChild(option);
                 });
 
                 projectSelector.disabled = false;
                 statusLight.classList.add('connected');
-
             } catch (error) {
                 console.error('プロジェクトの読み込みに失敗:', error);
                 projectSelector.innerHTML = `<option value="">読み込み失敗...</option>`;
@@ -157,19 +180,17 @@
             }
         };
 
-        // --- ログ保存ボタン ---
+        // --- イベントリスナー ---
+
+        // ★ プロジェクト選択時に指示書を自動生成
+        projectSelector.addEventListener('change', generateAiPrompt);
+
         saveLogBtn.addEventListener('click', async () => {
             const projectId = projectSelector.value;
             const logContent = logContentInput.value.trim();
 
-            if (!projectId) {
-                showMessage('error', 'プロジェクトを選択してください。');
-                return;
-            }
-            if (!logContent) {
-                showMessage('error', '記録するログ内容を入力してください。');
-                return;
-            }
+            if (!projectId) { return showMessage('error', 'プロジェクトを選択してください。'); }
+            if (!logContent) { return showMessage('error', '記録するログ内容を入力してください。'); }
 
             saveLogBtn.disabled = true;
             saveLogBtn.textContent = '記録中...';
@@ -183,13 +204,10 @@
                 });
                 
                 const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.message || '不明なエラーが発生しました。');
-                }
+                if (!response.ok) throw new Error(result.message || '不明なエラーが発生しました。');
 
                 showMessage('success', 'ログをデータベースに記録しました！');
-                logContentInput.value = ''; // 成功したらクリア
-
+                logContentInput.value = '';
             } catch (error) {
                 console.error('ログの保存に失敗:', error);
                 showMessage('error', `ログの保存に失敗しました: ${error.message}`);
@@ -200,13 +218,9 @@
             }
         });
 
-        // --- 全ログ取得ボタン ---
         fetchAllLogsBtn.addEventListener('click', async () => {
             const projectId = projectSelector.value;
-            if (!projectId) {
-                showMessage('error', 'プロジェクトを選択してください。');
-                return;
-            }
+            if (!projectId) { return showMessage('error', 'プロジェクトを選択してください。'); }
 
             fetchAllLogsBtn.disabled = true;
             fetchAllLogsBtn.textContent = '取得中...';
@@ -215,34 +229,31 @@
 
             try {
                 const response = await fetch(`/api/get-all-logs?projectId=${projectId}`);
-                if (!response.ok) {
-                    throw new Error(`サーバーエラー: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
                 const allLogsText = await response.text();
-                allLogsOutput.value = allLogsText || 'このプロジェクトにはまだログがありません。';
-
+                allLogsOutput.value = allLogsText.trim() || 'このプロジェクトにはまだログがありません。';
             } catch (error) {
                 console.error('全ログの取得に失敗:', error);
                 allLogsOutput.value = `全ログの取得に失敗しました: ${error.message}`;
                 showMessage('error', `全ログの取得に失敗しました: ${error.message}`);
             } finally {
                 fetchAllLogsBtn.disabled = false;
-                fetchAllLogsBtn.textContent = '選択中プロジェクトの全ログを取得';
+                fetchAllLogsBtn.textContent = '選択中プロジェクトの全ログをここに表示';
                 finishProgress();
             }
         });
 
-        // --- コピーボタン ---
+        // --- コピーボタン設定 ---
         const setupCopyButton = (button, targetElement, successText) => {
             button.addEventListener('click', async () => {
-                if (!targetElement.value) return;
+                if (!targetElement.value || targetElement.value.startsWith('プロジェクトを選択')) return;
                 await navigator.clipboard.writeText(targetElement.value);
                 const originalText = button.textContent;
                 button.textContent = successText;
                 setTimeout(() => { button.textContent = originalText; }, 2000);
             });
         };
-        setupCopyButton(copyAllLogsBtn, allLogsOutput, 'コピーしました！');
+        setupCopyButton(copyAiPromptBtn, aiPromptOutput, 'コピーしました！');
         
         // --- アプリケーション起動 ---
         initializeProjects();
