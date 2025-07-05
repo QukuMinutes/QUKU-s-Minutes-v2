@@ -1,19 +1,16 @@
 // /api/get-all-logs.js
 
-// 変更点: import文に変更
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// 変更点: export default function handler(...) に変更
 export default async function handler(request, response) {
     if (request.method !== 'GET') {
         return response.status(405).send('Method Not Allowed');
     }
 
-    // 変更点: request.queryから取得
     const { projectId } = request.query;
 
     if (!projectId) {
@@ -21,9 +18,10 @@ export default async function handler(request, response) {
     }
 
     try {
+        // ★変更点： log_content に加えて created_at も取得する
         const { data, error } = await supabase
             .from('development_logs')
-            .select('log_content')
+            .select('log_content, created_at') // ここ！
             .eq('project_id', projectId)
             .order('created_at', { ascending: true });
 
@@ -31,9 +29,22 @@ export default async function handler(request, response) {
             throw error;
         }
 
-        const allLogsText = data.map(log => log.log_content).join('\n\n---\n\n');
+        // ★変更点： 各ログの前に日付を付けて連結する
+        const allLogsText = data.map(log => {
+            // 日本時間（JST）に変換して、見やすい形式にフォーマット
+            const jstDate = new Date(log.created_at).toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit', // ← これを追加！
+                timeZone: 'Asia/Tokyo'
+            });
+            // 出力形式を「[YYYY/MM/DD HH:MM] ログ本文」のようにする
+            return `[${jstDate}]\n${log.log_content}`;
+        }).join('\n\n---\n\n'); // 各ログの区切り
 
-        // 変更点: Vercel推奨のレスポンス形式に変更
         response.setHeader('Content-Type', 'text/plain; charset=utf-8');
         return response.status(200).send(allLogsText);
         
